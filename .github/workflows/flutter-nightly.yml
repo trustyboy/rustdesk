@@ -6,6 +6,11 @@ on:
     - cron: "0 0 * * *"
   workflow_dispatch:
 
+# 被调用的 flutter-build.yml 中有 job 需要 contents: write（发布 nightly release）；
+# fork 仓库默认工作流权限为只读，不在此声明会导致 startup_failure
+permissions:
+  contents: write
+
 jobs:
   run-flutter-nightly-build:
     uses: ./.github/workflows/flutter-build.yml
