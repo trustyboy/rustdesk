@@ -660,6 +660,9 @@ impl Drop for CheckTestNatType {
 }
 
 pub fn test_nat_type() {
+    if cfg!(feature = "intranet-only") {
+        return;
+    }
     test_ipv6_sync();
     use std::sync::atomic::{AtomicBool, Ordering};
     std::thread::spawn(move || {
@@ -756,6 +759,10 @@ async fn test_nat_type_() -> ResultType<bool> {
 }
 
 pub async fn get_rendezvous_server(ms_timeout: u64) -> (String, Vec<String>, bool) {
+    if cfg!(feature = "intranet-only") {
+        let _ = ms_timeout;
+        return ("".to_owned(), Vec::new(), false);
+    }
     #[cfg(any(target_os = "android", target_os = "ios"))]
     let (mut a, mut b) = get_rendezvous_server_(ms_timeout);
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -837,6 +844,9 @@ async fn test_rendezvous_server_() {
 }
 
 pub fn test_rendezvous_server() {
+    if cfg!(feature = "intranet-only") {
+        return;
+    }
     std::thread::spawn(test_rendezvous_server_);
 }
 
@@ -1130,6 +1140,9 @@ fn process_software_update_check_response(bytes: Bytes) -> ResultType<()> {
 // Because the url is always `https://api.rustdesk.com/version/latest`.
 #[tokio::main(flavor = "current_thread")]
 pub async fn do_check_software_update() -> hbb_common::ResultType<()> {
+    if cfg!(feature = "intranet-only") {
+        return Ok(());
+    }
     let (request, url) =
         hbb_common::version_check_request(hbb_common::VER_TYPE_RUSTDESK_CLIENT.to_string());
     let proxy_conf = Config::get_socks();
@@ -1177,6 +1190,11 @@ pub async fn do_check_software_update() -> hbb_common::ResultType<()> {
 
 #[inline]
 pub fn get_app_name() -> String {
+    // intranet-only 构建改用 GFDesk 作为界面显示名；
+    // 配置/数据目录仍由 hbb_common 的 APP_NAME（"RustDesk"）决定，保持不变
+    if cfg!(feature = "intranet-only") {
+        return "GFDesk".to_owned();
+    }
     hbb_common::config::APP_NAME.read().unwrap().clone()
 }
 
@@ -1187,6 +1205,11 @@ pub fn is_rustdesk() -> bool {
 
 #[inline]
 pub fn get_uri_prefix() -> String {
+    // 深链 scheme 需与系统注册名一致（Android manifest 的 rustdesk://、
+    // Windows uni_links），显示名改动不改变 scheme
+    if cfg!(feature = "intranet-only") {
+        return "rustdesk://".to_owned();
+    }
     format!("{}://", get_app_name().to_lowercase())
 }
 
@@ -1238,6 +1261,10 @@ pub fn get_api_server(api: String, custom: String) -> String {
 }
 
 fn get_api_server_(api: String, custom: String) -> String {
+    if cfg!(feature = "intranet-only") {
+        let _ = (&api, &custom);
+        return String::new();
+    }
     #[cfg(windows)]
     if let Ok(lic) = crate::platform::windows::get_license_from_exe_name() {
         if !lic.api.is_empty() {
@@ -1294,6 +1321,9 @@ pub fn get_ipv6_punch_enabled() -> bool {
 }
 
 pub fn get_webrtc_enabled() -> bool {
+    if cfg!(feature = "intranet-only") {
+        return false;
+    }
     config::option2bool(
         keys::OPTION_ENABLE_WEBRTC,
         &get_local_option(keys::OPTION_ENABLE_WEBRTC),

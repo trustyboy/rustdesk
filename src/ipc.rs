@@ -1859,6 +1859,10 @@ pub fn get_id() -> String {
 }
 
 pub async fn get_rendezvous_server(ms_timeout: u64) -> (String, Vec<String>) {
+    if cfg!(feature = "intranet-only") {
+        let _ = ms_timeout;
+        return ("".to_owned(), Vec::new());
+    }
     if let Ok(Some(v)) = get_config_async("rendezvous_server", ms_timeout).await {
         let mut urls = v.split(",");
         let a = urls.next().unwrap_or_default().to_owned();
@@ -1941,6 +1945,10 @@ pub async fn get_nat_type(ms_timeout: u64) -> i32 {
 }
 
 pub async fn get_rendezvous_servers(ms_timeout: u64) -> Vec<String> {
+    if cfg!(feature = "intranet-only") {
+        let _ = ms_timeout;
+        return Vec::new();
+    }
     if let Ok(Some(v)) = get_config_async("rendezvous_servers", ms_timeout).await {
         return v.split(',').map(|x| x.to_owned()).collect();
     }
@@ -2011,6 +2019,9 @@ pub fn get_proxy_status() -> bool {
 }
 #[tokio::main(flavor = "current_thread")]
 pub async fn test_rendezvous_server() -> ResultType<()> {
+    if cfg!(feature = "intranet-only") {
+        return Ok(());
+    }
     let mut c = connect(1000, "").await?;
     c.send(&Data::TestRendezvousServer).await?;
     Ok(())

@@ -272,12 +272,14 @@ impl RendezvousMediator {
     }
 
     pub async fn start_all() {
+        #[cfg(not(feature = "intranet-only"))]
         crate::test_nat_type();
         if config::is_outgoing_only() {
             loop {
                 sleep(1.).await;
             }
         }
+        #[cfg(not(feature = "intranet-only"))]
         crate::hbbs_http::sync::start();
         #[cfg(target_os = "windows")]
         if crate::platform::is_installed() && crate::is_server() {
@@ -286,6 +288,7 @@ impl RendezvousMediator {
         check_zombie();
         let server = new_server();
         if config::option2bool("stop-service", &Config::get_option("stop-service")) {
+            #[cfg(not(feature = "intranet-only"))]
             crate::test_rendezvous_server();
         }
         let server_cloned = server.clone();
@@ -309,6 +312,7 @@ impl RendezvousMediator {
             *SOLVING_PK_MISMATCH.lock().await = "".to_owned();
             if !config::option2bool("stop-service", &Config::get_option("stop-service"))
                 && !crate::platform::installing_service()
+                && !cfg!(feature = "intranet-only")
             {
                 let mut futs = Vec::new();
                 let servers = Config::get_rendezvous_servers();
