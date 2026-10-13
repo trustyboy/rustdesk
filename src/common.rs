@@ -1190,11 +1190,6 @@ pub async fn do_check_software_update() -> hbb_common::ResultType<()> {
 
 #[inline]
 pub fn get_app_name() -> String {
-    // intranet-only 构建改用 GFDesk 作为界面显示名；
-    // 配置/数据目录仍由 hbb_common 的 APP_NAME（"RustDesk"）决定，保持不变
-    if cfg!(feature = "intranet-only") {
-        return "GFDesk".to_owned();
-    }
     hbb_common::config::APP_NAME.read().unwrap().clone()
 }
 
@@ -1205,11 +1200,6 @@ pub fn is_rustdesk() -> bool {
 
 #[inline]
 pub fn get_uri_prefix() -> String {
-    // 深链 scheme 需与系统注册名一致（Android manifest 的 rustdesk://、
-    // Windows uni_links），显示名改动不改变 scheme
-    if cfg!(feature = "intranet-only") {
-        return "rustdesk://".to_owned();
-    }
     format!("{}://", get_app_name().to_lowercase())
 }
 

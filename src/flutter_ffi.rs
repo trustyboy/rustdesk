@@ -1154,6 +1154,11 @@ pub fn main_get_lan_peers() -> String {
 }
 
 pub fn main_get_connect_status() -> String {
+    // 内网版禁用了 ID 服务器注册，status_num 永远为 0 会让界面一直停在
+    // "正在接入网络"；IP 直连不依赖该状态，直接上报就绪
+    if cfg!(feature = "intranet-only") {
+        return serde_json::json!({ "status_num": 1 }).to_string();
+    }
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
         serde_json::to_string(&get_connect_status()).unwrap_or("".to_string())
