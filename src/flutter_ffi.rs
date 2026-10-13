@@ -2362,6 +2362,10 @@ pub fn main_init_input_source() -> SyncReturn<()> {
 }
 
 pub fn main_is_installed_lower_version() -> SyncReturn<bool> {
+    // 内网版禁用了更新链路，"已安装版本较低"提示没有意义，恒为 false
+    if cfg!(feature = "intranet-only") {
+        return SyncReturn(false);
+    }
     SyncReturn(is_installed_lower_version())
 }
 
