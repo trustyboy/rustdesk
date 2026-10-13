@@ -253,6 +253,9 @@ pub fn set_local_option(key: String, value: String) {
 /// by prepending the API server address.
 pub fn resolve_avatar_url(avatar: String) -> String {
     let avatar = avatar.trim().to_owned();
+    if cfg!(feature = "intranet-only") && !avatar.starts_with("data:image/") {
+        return String::new();
+    }
     if avatar.starts_with('/') {
         let api_server = get_api_server();
         if !api_server.is_empty() {
@@ -1743,6 +1746,20 @@ pub fn is_remote_modify_enabled_by_control_permissions() -> Option<bool> {
 #[cfg(test)]
 mod tests {
     use super::{trim_video_save_directory, validate_windows_service_video_save_directory};
+
+    #[cfg(feature = "intranet-only")]
+    #[test]
+    fn intranet_avatar_uses_embedded_images_only() {
+        for avatar in [
+            "https://example.com/avatar.png",
+            "http://example.com/a",
+            "/avatar/a",
+        ] {
+            assert_eq!(super::resolve_avatar_url(avatar.to_owned()), "");
+        }
+        let embedded = "data:image/png;base64,aGVsbG8=";
+        assert_eq!(super::resolve_avatar_url(embedded.to_owned()), embedded);
+    }
 
     #[test]
     fn trim_configured_video_save_directory() {

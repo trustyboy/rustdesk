@@ -13,6 +13,15 @@
 > The developers of RustDesk do not condone or support any unethical or illegal use of this software. Misuse, such as unauthorized access, control or invasion of privacy, is strictly against our guidelines. The authors are not responsible for any misuse of the application.
 
 
+## 当前分支：内网直连版
+
+本分支默认启用 `intranet-only`，通过 GitHub Actions 构建 Windows x64、macOS x64 和 Android arm64 安装包。
+
+- 使用 IP 地址或 `域名:端口` 直连；ID、`ID@public` 和 `ID@服务器` 连接被禁用。目标地址由用户指定，地址范围由网络或防火墙策略管理。
+- 禁用 ID 注册、NAT/STUN 探测、在线更新、API 同步与审计上报、Telegram 验证码发送和 HTTP(S) 头像下载；内嵌头像与本地验证器生成的 TOTP 验证码仍可使用。
+- Windows EXE 安装隐藏卸载列表条目，安装目录保留卸载快捷方式；自定义安装路径和版本信息保存在独立安装状态中。升级时需要实际安装新版本，以替换后台服务。MSI 使用原有安装机制。
+- Android 应用 ID 为 `com.fzwise.gfdesk`，显示名称为 GFDesk；原版应用的数据与授权需要重新配置。桌面继续使用 RustDesk 名称。
+
 Chat with us: [Discord](https://discord.gg/nDceKgxnkV) | [Twitter](https://twitter.com/rustdesk) | [Reddit](https://www.reddit.com/r/rustdesk) | [YouTube](https://www.youtube.com/@rustdesk)
 
 [![RustDesk Server Pro](https://img.shields.io/badge/RustDesk%20Server%20Pro-Advanced%20Features-blue)](https://rustdesk.com/pricing.html)

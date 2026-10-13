@@ -1154,9 +1154,17 @@ pub fn main_get_lan_peers() -> String {
 }
 
 pub fn main_get_connect_status() -> String {
-    // 内网版禁用了 ID 服务器注册，status_num 永远为 0 会让界面一直停在
-    // "正在接入网络"；IP 直连不依赖该状态，直接上报就绪
     if cfg!(feature = "intranet-only") {
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        {
+            let mut status = get_connect_status();
+            // 直连无需注册就绪，仍保留 IPC 故障状态和设置页使用的连接数。
+            if status.status_num == 0 {
+                status.status_num = 1;
+            }
+            return serde_json::to_string(&status).unwrap_or_default();
+        }
+        #[cfg(any(target_os = "android", target_os = "ios"))]
         return serde_json::json!({ "status_num": 1 }).to_string();
     }
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -2362,10 +2370,6 @@ pub fn main_init_input_source() -> SyncReturn<()> {
 }
 
 pub fn main_is_installed_lower_version() -> SyncReturn<bool> {
-    // 内网版禁用了更新链路，"已安装版本较低"提示没有意义，恒为 false
-    if cfg!(feature = "intranet-only") {
-        return SyncReturn(false);
-    }
     SyncReturn(is_installed_lower_version())
 }
 
@@ -3099,6 +3103,21 @@ pub mod server_side {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(all(
+        feature = "intranet-only",
+        not(any(target_os = "android", target_os = "ios"))
+    ))]
+    #[test]
+    fn intranet_status_preserves_desktop_fields() {
+        let mut expected = serde_json::to_value(get_connect_status()).unwrap();
+        if expected["status_num"] == 0 {
+            expected["status_num"] = serde_json::json!(1);
+        }
+        let actual: serde_json::Value = serde_json::from_str(&main_get_connect_status()).unwrap();
+        assert_eq!(actual, expected);
+        assert!(actual["video_conn_count"].is_number());
+    }
 
     #[test]
     fn sync_common_rejects_verified_download_url() {

@@ -2768,6 +2768,9 @@ async fn test_bind_ipv6() -> ResultType<SocketAddr> {
 }
 
 pub async fn test_ipv6() -> Option<tokio::task::JoinHandle<()>> {
+    if cfg!(feature = "intranet-only") {
+        return None;
+    }
     {
         // One look and one claim of the minute, under one lock: two connections arriving
         // together would otherwise both find it over and both probe.
@@ -3955,6 +3958,12 @@ mod tests {
         // `decode_id_pk` is the same blob minus the fingerprint, so the field is invisible to
         // non-WebRTC handshakes.
         assert_eq!(decode_id_pk(&signed, &pk).unwrap(), (id, their_pk));
+    }
+
+    #[cfg(feature = "intranet-only")]
+    #[tokio::test]
+    async fn intranet_ipv6_probe_is_disabled() {
+        assert!(test_ipv6().await.is_none());
     }
 
     // The route probe is awaited on the connection path, so whatever it finds - an address, or

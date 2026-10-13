@@ -454,6 +454,11 @@ impl Client {
             ));
         }
 
+        // 内网模式只允许前面的直连路径，ID@server 同样需要在联网前拒绝。
+        if cfg!(feature = "intranet-only") {
+            bail!("Connection not allowed");
+        }
+
         let other_server = interface.get_lch().read().unwrap().other_server.clone();
         let (peer, other_server, key, token) = if let Some((a, b, c)) = other_server.as_ref() {
             (a.as_ref(), b.as_ref(), c.as_ref(), "")

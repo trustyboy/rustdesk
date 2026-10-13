@@ -237,6 +237,8 @@ impl<T: InvokeUiCM> ConnectionManager<T> {
         from_switch: bool,
         #[cfg(not(any(target_os = "ios")))] tx: mpsc::UnboundedSender<Data>,
     ) {
+        #[cfg(feature = "intranet-only")]
+        let avatar = crate::ui_interface::resolve_avatar_url(avatar);
         let client = Client {
             id,
             authorized,

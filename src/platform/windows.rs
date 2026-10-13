@@ -1386,6 +1386,9 @@ pub fn get_install_info() -> (String, String, String, String) {
 }
 
 fn get_default_install_info() -> (String, String, String, String) {
+    if cfg!(feature = "intranet-only") {
+        return get_install_info();
+    }
     get_install_info_with_subkey(get_subkey(&crate::get_app_name(), false))
 }
 
@@ -1584,10 +1587,44 @@ fn get_after_install(
     ", create_service=get_create_service(&exe))
 }
 
+/// 生成隐藏安装状态及旧 EXE 注册信息迁移命令，供安装和升级共用。
+fn get_exe_install_state_cmd(subkey: &str, path: &str) -> ResultType<String> {
+    validate_install_value(path)?;
+    let app_name = crate::get_app_name();
+    let install_state = format!("{HKLM_PREFIX}Software\\{app_name}\\InstallState\\{app_name}");
+    // 迁移旧 EXE 状态时保留附加配置，仅在复制成功后移除应用列表条目。
+    let migrate = if subkey != install_state {
+        format!(
+            "reg query {subkey} > nul 2>&1\n\
+if not errorlevel 1 (\n\
+reg copy {subkey} {install_state} /s /f || exit /b 1\n\
+reg delete {subkey} /f || exit /b 1\n\
+)"
+        )
+    } else {
+        String::new()
+    };
+    let version = crate::VERSION.replace("-", ".");
+    let build_date = crate::BUILD_DATE;
+    Ok(format!(
+        "
+{migrate}
+reg add {install_state} /f /v Version /t REG_SZ /d \"{version}\"
+reg add {install_state} /f /v BuildDate /t REG_SZ /d \"{build_date}\"
+reg add {install_state} /f /v WindowsInstaller /t REG_DWORD /d 0
+reg add {install_state} /f /v InstallLocation /t REG_SZ /d \"{path}\"
+"
+    ))
+}
+
 pub fn install_me(options: &str, path: String, silent: bool, debug: bool) -> ResultType<()> {
     // MSI and EXE installations use different registry layouts, so MSI-to-EXE upgrades are not supported.
     let (installed_subkey, _, _, _) = get_install_info();
-    if get_windows_installer_state(&installed_subkey)? == Some(true) {
+    let installer_state = get_windows_installer_state(&installed_subkey)?;
+    if installer_state == Some(true)
+        || (cfg!(feature = "intranet-only")
+            && get_msi_product_code(&installed_subkey, installer_state)?.is_some())
+    {
         bail!("Cannot install the EXE package over an existing MSI installation");
     }
     let uninstall_str = get_uninstall(false, false)?;
@@ -1723,11 +1760,9 @@ copy /Y \"{tmp_path}\\{app_name} Tray.lnk\" \"%PROGRAMDATA%\\Microsoft\\Windows\
     // Remember to check if `update_me` need to be changed if changing the `cmds`.
     // No need to merge the existing dup code, because the code in these two functions are too critical.
     // New code should be written in a common function.
-    // 卸载面板条目来自该注册表键；intranet-only 构建不写，不出现在
-    // "应用和功能"列表。安装信息读取端（get_install_info）在键缺失时
-    // 回退默认安装路径，判定与卸载不受影响（自定义安装路径除外）。
+    // 隐藏应用列表条目，但保留自定义路径及 EXE 类型供升级、卸载使用。
     let uninstall_reg = if cfg!(feature = "intranet-only") {
-        String::new()
+        get_exe_install_state_cmd(&subkey, &path)?
     } else {
         let display_icon = shortcut_icon_location.as_deref().unwrap_or(exe.as_str());
         let nested_exe = escape_nested_cmd_ampersands(&exe);
@@ -3420,7 +3455,16 @@ pub fn update_me(debug: bool) -> ResultType<()> {
     if !is_installed {
         bail!("{} is not installed.", &app_name);
     }
-    let is_msi = is_msi_installed().ok();
+    let is_msi = if cfg!(feature = "intranet-only") {
+        // 检测失败不能当作 EXE，否则会覆盖 MSI 状态。
+        let installer_state = get_windows_installer_state(&subkey)?;
+        Some(
+            installer_state == Some(true)
+                || get_msi_product_code(&subkey, installer_state)?.is_some(),
+        )
+    } else {
+        is_msi_installed().ok()
+    };
     let reg_msi_key = get_reg_msi_key(&subkey, is_msi)?;
 
     let app_exe_name = &format!("{}.exe", &app_name);
@@ -3505,7 +3549,9 @@ reg add {subkey} /f /v EstimatedSize /t REG_DWORD /d {size}
         )
     }
 
-    let reg_cmd = {
+    let reg_cmd = if cfg!(feature = "intranet-only") && is_msi == Some(false) {
+        get_exe_install_state_cmd(&subkey, &path)?
+    } else {
         let reg_cmd_main = get_reg_cmd(
             &subkey,
             is_msi,
@@ -4834,6 +4880,47 @@ mod tests {
                 validate_install_app_name(app_name).is_err(),
                 "unsafe application name was accepted: {app_name}"
             );
+        }
+    }
+
+    #[test]
+    fn exe_install_state_preserves_custom_path_and_package_type() {
+        let app_name = crate::get_app_name();
+        let subkey = format!("{HKLM_PREFIX}Software\\{app_name}\\InstallState\\{app_name}");
+        let path = r"D:\应用目录\RustDesk";
+        let commands = get_exe_install_state_cmd(&subkey, path).unwrap();
+        for value in [
+            format!("/v InstallLocation /t REG_SZ /d \"{path}\""),
+            format!("/v BuildDate /t REG_SZ /d \"{}\"", crate::BUILD_DATE),
+            format!(
+                "/v Version /t REG_SZ /d \"{}\"",
+                crate::VERSION.replace("-", ".")
+            ),
+            "/v WindowsInstaller /t REG_DWORD /d 0".to_owned(),
+        ] {
+            assert!(commands.contains(&format!("reg add {subkey} /f {value}")));
+        }
+        assert!(!commands.contains("CurrentVersion\\Uninstall"));
+        assert!(!commands.contains("reg delete"));
+        assert_eq!(get_msi_product_code(&subkey, Some(false)).unwrap(), None);
+    }
+
+    #[test]
+    fn exe_install_state_migrates_legacy_uninstall_entries() {
+        let app_name = crate::get_app_name();
+        let install_state = format!("{HKLM_PREFIX}Software\\{app_name}\\InstallState\\{app_name}");
+        for subkey in [
+            get_subkey(&app_name, false),
+            get_subkey(&app_name, true),
+            get_subkey(IS1, false),
+            get_subkey(IS1, true),
+        ] {
+            let commands = get_exe_install_state_cmd(&subkey, r"D:\RustDesk").unwrap();
+            assert!(commands.contains(&format!(
+                "reg copy {subkey} {install_state} /s /f || exit /b 1"
+            )));
+            assert!(commands.contains(&format!("reg delete {subkey} /f || exit /b 1")));
+            assert!(!commands.contains(&format!("reg add {subkey}")));
         }
     }
 

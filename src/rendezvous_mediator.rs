@@ -312,9 +312,12 @@ impl RendezvousMediator {
             *SOLVING_PK_MISMATCH.lock().await = "".to_owned();
             if !config::option2bool("stop-service", &Config::get_option("stop-service"))
                 && !crate::platform::installing_service()
-                && !cfg!(feature = "intranet-only")
             {
                 let mut futs = Vec::new();
+                // 内网模式只跳过服务器注册，直连会话仍由服务状态控制。
+                #[cfg(feature = "intranet-only")]
+                let servers: Vec<String> = Vec::new();
+                #[cfg(not(feature = "intranet-only"))]
                 let servers = Config::get_rendezvous_servers();
                 SHOULD_EXIT.store(false, Ordering::SeqCst);
                 MANUAL_RESTARTED.store(false, Ordering::SeqCst);
