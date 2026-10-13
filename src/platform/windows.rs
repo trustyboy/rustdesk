@@ -1723,12 +1723,17 @@ copy /Y \"{tmp_path}\\{app_name} Tray.lnk\" \"%PROGRAMDATA%\\Microsoft\\Windows\
     // Remember to check if `update_me` need to be changed if changing the `cmds`.
     // No need to merge the existing dup code, because the code in these two functions are too critical.
     // New code should be written in a common function.
-    let cmds = format!(
-        "
-{uninstall_str}
-chcp 65001
-md \"{path}\"
-{copy_exe}
+    // 卸载面板条目来自该注册表键；intranet-only 构建不写，不出现在
+    // "应用和功能"列表。安装信息读取端（get_install_info）在键缺失时
+    // 回退默认安装路径，判定与卸载不受影响（自定义安装路径除外）。
+    let uninstall_reg = if cfg!(feature = "intranet-only") {
+        String::new()
+    } else {
+        let display_icon = shortcut_icon_location.as_deref().unwrap_or(exe.as_str());
+        let nested_exe = escape_nested_cmd_ampersands(&exe);
+        let version = crate::VERSION.replace("-", ".");
+        let build_date = crate::BUILD_DATE;
+        format!("
 reg add {subkey} /f
 reg add {subkey} /f /v DisplayIcon /t REG_SZ /d \"{display_icon}\"
 reg add {subkey} /f /v DisplayName /t REG_SZ /d \"{app_name}\"
@@ -1743,6 +1748,15 @@ reg add {subkey} /f /v VersionBuild /t REG_DWORD /d {version_build}
 reg add {subkey} /f /v UninstallString /t REG_SZ /d \"\\\"{nested_exe}\\\" --uninstall\"
 reg add {subkey} /f /v EstimatedSize /t REG_DWORD /d {size}
 reg add {subkey} /f /v WindowsInstaller /t REG_DWORD /d 0
+")
+    };
+    let cmds = format!(
+        "
+{uninstall_str}
+chcp 65001
+md \"{path}\"
+{copy_exe}
+{uninstall_reg}
 {mk_shortcut_commands}
 {uninstall_shortcut_commands}
 {tray_shortcuts}
@@ -1754,10 +1768,6 @@ copy /Y \"{tmp_path}\\Uninstall {app_name}.lnk\" \"{path}\\\"
 {install_remote_printer}
 {sleep}
     ",
-        display_icon = shortcut_icon_location.as_deref().unwrap_or(exe.as_str()),
-        nested_exe = escape_nested_cmd_ampersands(&exe),
-        version = crate::VERSION.replace("-", "."),
-        build_date = crate::BUILD_DATE,
         after_install = get_after_install(
             &exe,
             Some(reg_value_start_menu_shortcuts),
