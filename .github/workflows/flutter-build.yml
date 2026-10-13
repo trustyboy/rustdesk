@@ -668,6 +668,14 @@ jobs:
           cargo test --locked --release --lib verified_dmg_tests --features "flutter,hwcodec,unix-file-copy-paste${{ matrix.job.extra-cargo-features }}"
           cargo test --locked --release --lib update_metadata::tests --features "flutter,hwcodec,unix-file-copy-paste${{ matrix.job.extra-cargo-features }}"
 
+      - name: Ad-hoc re-sign app bundle
+        # build.py 在 flutter 打包签名之后才把 service 二进制拷进 app 包，
+        # 封条会失效，macOS 会静默拒绝启动；无开发者证书时在打包 dmg 前重打 ad-hoc 签名
+        if: env.UPLOAD_ARTIFACT == 'true' && env.MACOS_P12_BASE64 == null
+        run: |
+          codesign --force --deep --sign - ./flutter/build/macos/Build/Products/Release/RustDesk.app
+          codesign --verify --deep --strict ./flutter/build/macos/Build/Products/Release/RustDesk.app
+
       - name: create unsigned dmg
         if: env.UPLOAD_ARTIFACT == 'true'
         run: |
