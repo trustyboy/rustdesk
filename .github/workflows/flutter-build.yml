@@ -689,6 +689,19 @@ jobs:
             - \
             ./flutter/macos/Runner/Release.entitlements
 
+      - name: 验证无证书应用可启动
+        if: env.UPLOAD_ARTIFACT == 'true' && env.MACOS_P12_BASE64 == null
+        run: |
+          python3 - <<'PY'
+          import os
+          import subprocess
+
+          executable = "./flutter/build/macos/Build/Products/Release/RustDesk.app/Contents/MacOS/RustDesk"
+          result = subprocess.run([executable, "--version"], check=True, stdout=subprocess.PIPE, text=True, timeout=30)
+          if result.stdout.strip() != os.environ["VERSION"]:
+              raise SystemExit(f"应用版本不符：{result.stdout!r}")
+          PY
+
       - name: create unsigned dmg
         if: env.UPLOAD_ARTIFACT == 'true'
         run: |

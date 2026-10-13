@@ -6,9 +6,12 @@ app_path=$1
 identity=$2
 entitlements=$3
 
-sign_args=(--force --options runtime --sign "$identity")
-if [[ "$identity" != "-" ]]; then
-  sign_args+=(--timestamp)
+sign_args=(--force --sign "$identity")
+if [[ "$identity" == "-" ]]; then
+  # ad-hoc 没有 Team ID，清除旧 runtime 标志以允许加载包内动态库。
+  sign_args+=(--options 0)
+else
+  sign_args+=(--options runtime --timestamp)
 fi
 
 frameworks_path="$app_path/Contents/Frameworks"
